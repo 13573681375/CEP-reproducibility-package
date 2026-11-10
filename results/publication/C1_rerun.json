@@ -1,0 +1,30 @@
+{
+  "status": "PASS",
+  "fresh_cases": [
+    {
+      "name": "C1_A_active_only",
+      "status": "PASS",
+      "metric_differences": {
+        "tracking_RMS_m": 0.0,
+        "command_difference_RMS_mps2": -8.673617379884035e-19,
+        "command_squared_integral_proxy": 5.551115123125783e-17,
+        "total_billed_resource": 0
+      },
+      "results": {
+        "values": {
+          "tracking_RMS_m": 0.889449145959744,
+          "command_difference_RMS_mps2": 0.004108065873722263,
+          "command_squared_integral_proxy": 0.28219604721686115,
+          "total_billed_resource": 300
+        },
+        "samples": 180,
+        "decisions": 540,
+        "metadata": 180,
+        "data_attempts": 120,
+        "minimum_logged_continuous_gap_bound_m": 32.711594216553095
+      },
+      "scope": "Fresh full180-sample simulation with unchanged physical/controller logic; wall times not required to match"
+    }
+  ],
+  "elapsed_seconds": 6.5163928050000095
+}

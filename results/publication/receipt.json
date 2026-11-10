@@ -1,0 +1,8 @@
+{
+  "status": "PUBLIC_DOWNLOAD_SHA256_MATCH",
+  "release": "https://github.com/13573681375/CEP-reproducibility-package/releases/tag/v1.1.0",
+  "asset_url": "https://github.com/13573681375/CEP-reproducibility-package/releases/download/v1.1.0/CEP13_current_records.zip",
+  "sha256": "e94e52898fa24550702fda84860e814e27302507e247c13b6d7b52bb19968f28",
+  "bytes": 34628519,
+  "verification": "Unauthenticated HTTPS download after release publication; three actual minimal reruns completed beforehand"
+}
