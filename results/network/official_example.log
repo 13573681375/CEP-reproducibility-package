@@ -1,0 +1,14 @@
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
+Final Simulation duration 12.01
+Data rate 16000bps
+App start time 2.11 sec
+App stop time 12.01 sec
+Tx address: 7.0.0.2
+Rx address: 7.0.0.3
+Total Tx bits = 158400
+Total Tx packets = 99
+Total Rx bits = 158400
+Total Rx packets = 99
+Avrg thput = 16 kbps
+Average Packet Inter-Reception (PIR) 0.100008 sec

@@ -1,0 +1,18 @@
+{
+  "stage": "PINNED_OFFICIAL_EXAMPLE_EXECUTED",
+  "ns3": "c90c13b8310a813cf4eaf67a2c90df497bbd1965",
+  "nr": "72ae0c3bc894bc3416dc69832ada6fcaeebdaeaa",
+  "databases": [
+    {
+      "file": "default-nr-v2x-simple-demo.db",
+      "tables": {
+        "pscchTxUeMac": 198,
+        "psschTxUeMac": 495,
+        "pscchRxUePhy": 198,
+        "psschRxUePhy": 99,
+        "pktTxRx": 198
+      }
+    }
+  ],
+  "scope": "Toolchain/example execution only; not yet paper-controller co-simulation or hardware radio evidence"
+}

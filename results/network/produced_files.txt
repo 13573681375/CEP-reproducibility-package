@@ -1,0 +1,14 @@
+./src/CMakeLists.txt
+./doc/codingstd.txt
+./doc/contributing.txt
+./doc/release_steps.txt
+./doc/build.txt
+./examples/CMakeLists.txt
+./utils/CMakeLists.txt
+./NrUlMacStats.txt
+./NrDlMacStats.txt
+./CMakeLists.txt
+./default-nr-v2x-simple-demo.db
+./cmake-cache/ns3config.txt
+./cmake-cache/CMakeCache.txt
+./scratch/CMakeLists.txt
