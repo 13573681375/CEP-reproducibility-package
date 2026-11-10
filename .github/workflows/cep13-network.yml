@@ -1,0 +1,65 @@
+name: CEP13 pinned NR-V2X build and execution
+on:
+  push:
+    branches: [cep13-validation]
+    paths: ['.github/workflows/cep13-network.yml', 'validation/network/**']
+permissions:
+  contents: write
+jobs:
+  pinned-nr:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build exact public source pair and run official example
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results/network
+          exec > >(tee results/network/execution.log) 2>&1
+          date -u
+          uname -a
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends g++ cmake ninja-build python3-dev pkg-config libsqlite3-dev libeigen3-dev
+          git clone --depth 1 --branch ns-3-dev-v2x-v1.1 https://gitlab.com/cttc-lena/ns-3-dev.git /tmp/cep-ns3
+          test "$(git -C /tmp/cep-ns3 rev-parse HEAD)" = c90c13b8310a813cf4eaf67a2c90df497bbd1965
+          git clone --depth 1 --branch v2x-1.1 https://gitlab.com/cttc-lena/nr.git /tmp/cep-ns3/contrib/nr
+          test "$(git -C /tmp/cep-ns3/contrib/nr rev-parse HEAD)" = 72ae0c3bc894bc3416dc69832ada6fcaeebdaeaa
+          git -C /tmp/cep-ns3 rev-parse HEAD > results/network/ns3_commit.txt
+          git -C /tmp/cep-ns3/contrib/nr rev-parse HEAD > results/network/nr_commit.txt
+          cp /tmp/cep-ns3/contrib/nr/README.md results/network/NR_README.md
+          find /tmp/cep-ns3/contrib/nr -iname '*v2x*simple*' -type f -print
+          cd /tmp/cep-ns3
+          ./ns3 configure --enable-examples --disable-tests --enable-asserts --disable-werror --build-profile=optimized
+          ./ns3 build cttc-nr-v2x-demo-simple -j 2
+          ./ns3 run 'cttc-nr-v2x-demo-simple --help' > "$GITHUB_WORKSPACE/results/network/example_help.txt" 2>&1
+          ./ns3 run 'cttc-nr-v2x-demo-simple' > "$GITHUB_WORKSPACE/results/network/official_example.log" 2>&1
+          find . -maxdepth 2 -type f \( -name '*.db' -o -name '*.txt' -o -name '*.csv' \) -print > "$GITHUB_WORKSPACE/results/network/produced_files.txt"
+          python3 - <<'PY'
+          import json, pathlib, sqlite3, shutil
+          root=pathlib.Path('/tmp/cep-ns3'); dst=pathlib.Path.home()
+          out=pathlib.Path(__import__('os').environ['GITHUB_WORKSPACE'])/'results/network'
+          dbs=[]
+          for p in root.glob('*.db'):
+              shutil.copy2(p,out/p.name)
+              con=sqlite3.connect(p);tables=[x[0] for x in con.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+              dbs.append(dict(file=p.name,tables={t:con.execute('SELECT COUNT(*) FROM "'+t.replace('"','""')+'"').fetchone()[0] for t in tables}))
+          (out/'status.json').write_text(json.dumps(dict(stage='PINNED_OFFICIAL_EXAMPLE_EXECUTED',ns3='c90c13b8310a813cf4eaf67a2c90df497bbd1965',nr='72ae0c3bc894bc3416dc69832ada6fcaeebdaeaa',databases=dbs,scope='Toolchain/example execution only; not yet paper-controller co-simulation or hardware radio evidence'),indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cep13-nr-pinned-execution
+          path: results/network
+          retention-days: 30
+      - name: Preserve small provenance on validation branch
+        if: always()
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add results/network/*.json results/network/*.txt results/network/*.log results/network/*.md 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -m "Record actual CEP13 pinned NR build and execution outcome"
+            git push origin HEAD:cep13-validation
+          fi
