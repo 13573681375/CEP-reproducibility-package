@@ -1,0 +1,171 @@
+--- official.cc
++++ cep13.cc
+@@ -38,6 +38,7 @@
+ 
+ #include "ns3/antenna-module.h"
+ #include "ns3/applications-module.h"
++#include <cstring>
+ #include "ns3/config-store-module.h"
+ #include "ns3/config-store.h"
+ #include "ns3/core-module.h"
+@@ -219,6 +220,31 @@
+     pirCounter++;
+ }
+ 
++// CEP13 derivative of the GPL-2.0 NR-V2X example. Payload-independent one-way trace coupling.
++#include <fstream>
++#include <vector>
++class CepHeader : public Header {
++public:
++ uint8_t type=0,link=0; int64_t generation=0; uint64_t generatedNs=0; uint32_t seq=0; double speed=25.0;
++ static TypeId GetTypeId(){static TypeId t=TypeId("ns3::Cep13Header").SetParent<Header>().AddConstructor<CepHeader>();return t;}
++ TypeId GetInstanceTypeId() const override{return GetTypeId();}
++ uint32_t GetSerializedSize() const override{return 48;}
++ void Serialize(Buffer::Iterator i) const override{ i.WriteHtonU32(0x43455031);i.WriteU8(type);i.WriteU8(link);i.WriteHtonU16(0);i.WriteHtonU64(static_cast<uint64_t>(generation));i.WriteHtonU64(generatedNs);i.WriteHtonU32(seq);i.WriteHtonU32(48);uint64_t bits;std::memcpy(&bits,&speed,8);i.WriteHtonU64(bits);i.WriteHtonU64(0); }
++ uint32_t Deserialize(Buffer::Iterator i) override{NS_ABORT_MSG_IF(i.ReadNtohU32()!=0x43455031,"Bad CEP magic");type=i.ReadU8();link=i.ReadU8();i.ReadNtohU16();generation=static_cast<int64_t>(i.ReadNtohU64());generatedNs=i.ReadNtohU64();seq=i.ReadNtohU32();i.ReadNtohU32();uint64_t bits=i.ReadNtohU64();std::memcpy(&speed,&bits,8);i.ReadNtohU64();return 48;}
++ void Print(std::ostream& os) const override{os<<"CEP13 "<<generation;}
++};
++std::ofstream cepEvents;
++void CepSend(Ptr<Socket> socket,uint8_t type,uint8_t link,int64_t generation,uint32_t seq){
++ CepHeader h;h.type=type;h.link=link;h.generation=generation;h.generatedNs=static_cast<uint64_t>((3.0+generation*0.1)*1e9+0.5);h.seq=seq;
++ Ptr<Packet> p=Create<Packet>();p->AddHeader(h);int sent=socket->Send(p);
++ cepEvents<<"tx,"<<Simulator::Now().GetNanoSeconds()<<","<<unsigned(link)<<","<<unsigned(type)<<","<<generation<<","<<seq<<","<<unsigned(type==0?0:link)<<","<<sent<<"\n";
++ txPktCounter++;txByteCounter+=p->GetSize();
++}
++void CepReceive(uint32_t node,Ptr<Socket> socket){
++ Address from;Ptr<Packet> p;while((p=socket->RecvFrom(from))){if(p->GetSize()<48)continue;CepHeader h;p->RemoveHeader(h);bool intended=(h.type==0?node>0:node==uint32_t(h.link+1));
++ cepEvents<<"rx,"<<Simulator::Now().GetNanoSeconds()<<","<<unsigned(h.link)<<","<<unsigned(h.type)<<","<<h.generation<<","<<h.seq<<","<<node<<",48\n";
++ if(intended){rxPktCounter++;rxByteCounter+=48;}}
++}
+ int
+ main(int argc, char* argv[])
+ {
+@@ -227,7 +253,7 @@
+      * command line. Each of them is initialized with a default value.
+      */
+     // Scenario parameters (that we will use inside this script):
+-    uint16_t interUeDistance = 20; // meters
++    uint16_t interUeDistance = 35; // meters
+     bool logging = false;
+ 
+     // Traffic parameters (that we will use inside this script:)
+@@ -238,7 +264,7 @@
+     Time delayBudget = Seconds(0); // Use T2 as selection window edge
+ 
+     // Simulation parameters.
+-    Time simTime = Seconds(10);
++    Time simTime = Seconds(20);
+     // Sidelink bearers activation time
+     Time slBearersActivationTime = Seconds(2.0);
+ 
+@@ -258,7 +284,9 @@
+      * that we may accept as input, as well as their description, and the storage
+      * variable.
+      */
++    bool activeOnly=false;
+     CommandLine cmd(__FILE__);
++    cmd.AddValue("activeOnly","C1 active-only data service, with fixed metadata frames",activeOnly);
+ 
+     cmd.AddValue("interUeDistance", "The distance among the UEs in the topology", interUeDistance);
+     cmd.AddValue("logging", "Enable logging", logging);
+@@ -336,7 +364,7 @@
+      * Create a NodeContainer for the UEs, name it as per their traffic type.
+      */
+     NodeContainer ueVoiceContainer;
+-    uint16_t ueNum = 2;
++    uint16_t ueNum = 4;
+     ueVoiceContainer.Create(ueNum);
+ 
+     /*
+@@ -347,7 +375,7 @@
+      */
+ 
+     MobilityHelper mobility;
+-    mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
++    mobility.SetMobilityModel("ns3::ConstantVelocityMobilityModel");
+     Ptr<ListPositionAllocator> positionAllocUe = CreateObject<ListPositionAllocator>();
+     for (uint16_t i = 0; i < ueNum; i++)
+     {
+@@ -355,6 +383,7 @@
+     }
+     mobility.SetPositionAllocator(positionAllocUe);
+     mobility.Install(ueVoiceContainer);
++    for(uint32_t n=0;n<4;++n)ueVoiceContainer.Get(n)->GetObject<ConstantVelocityMobilityModel>()->SetVelocity(Vector(25,0,0));
+ 
+     /* The default topology is the following:
+      *
+@@ -740,56 +769,16 @@
+      * Server app: PacketSink application.
+      */
+ 
+-    // Set Application in the UEs
+-    OnOffHelper sidelinkClient("ns3::UdpSocketFactory", remoteAddress);
+-    sidelinkClient.SetAttribute("EnableSeqTsSizeHeader", BooleanValue(true));
+-    std::string dataRateBeString = std::to_string(dataRateBe) + "kb/s";
+-    std::cout << "Data rate " << DataRate(dataRateBeString) << std::endl;
+-    sidelinkClient.SetConstantRate(DataRate(dataRateBeString), udpPacketSizeBe);
+-
+-    ApplicationContainer clientApps = sidelinkClient.Install(ueVoiceContainer.Get(0));
+-    // onoff application will send the first packet at :
+-    // finalSlBearersActivationTime + ((Pkt size in bits) / (Data rate in bits per sec))
+-    clientApps.Start(finalSlBearersActivationTime);
+-    clientApps.Stop(finalSimTime);
+-
+-    // Output app start, stop and duration
+-    double realAppStart =
+-        finalSlBearersActivationTime.GetSeconds() +
+-        ((double)udpPacketSizeBe * 8.0 / (DataRate(dataRateBeString).GetBitRate()));
+-    double appStopTime = (finalSimTime).GetSeconds();
+-
+-    std::cout << "App start time " << realAppStart << " sec" << std::endl;
+-    std::cout << "App stop time " << appStopTime << " sec" << std::endl;
+-
+-    ApplicationContainer serverApps;
+-    PacketSinkHelper sidelinkSink("ns3::UdpSocketFactory", localAddress);
+-    sidelinkSink.SetAttribute("EnableSeqTsSizeHeader", BooleanValue(true));
+-    serverApps = sidelinkSink.Install(ueVoiceContainer.Get(ueVoiceContainer.GetN() - 1));
+-    serverApps.Start(Seconds(2.0));
+-
+-    /*
+-     * Hook the traces, to be used to compute average PIR and to data to be
+-     * stored in a database
+-     */
+-
+-    // Trace receptions; use the following to be robust to node ID changes
+-    std::ostringstream path;
+-    path << "/NodeList/" << ueVoiceContainer.Get(1)->GetId()
+-         << "/ApplicationList/0/$ns3::PacketSink/Rx";
+-    Config::ConnectWithoutContext(path.str(), MakeCallback(&ReceivePacket));
+-    path.str("");
+-
+-    path << "/NodeList/" << ueVoiceContainer.Get(1)->GetId()
+-         << "/ApplicationList/0/$ns3::PacketSink/Rx";
+-    Config::ConnectWithoutContext(path.str(), MakeCallback(&ComputePir));
+-    path.str("");
+-
+-    path << "/NodeList/" << ueVoiceContainer.Get(0)->GetId()
+-         << "/ApplicationList/0/$ns3::OnOffApplication/Tx";
+-    Config::ConnectWithoutContext(path.str(), MakeCallback(&TransmitPacket));
+-    path.str("");
+-
++
++    NS_ABORT_MSG_IF(useIPv6,"CEP13 trace configuration is IPv4 only");
++    cepEvents.open(outputDir+simTag+"-events.csv");cepEvents<<"event,time_ns,link,type,generation,seq,node,app_bytes\n";
++    ApplicationContainer clientApps,serverApps; // Original application trace loops remain empty.
++    std::vector<Ptr<Socket>> cepSockets;
++    for(uint32_t n=0;n<4;++n){auto sock=Socket::CreateSocket(ueVoiceContainer.Get(n),UdpSocketFactory::GetTypeId());sock->Bind(localAddress);sock->Connect(remoteAddress);sock->SetRecvCallback(MakeBoundCallback(&CepReceive,n));cepSockets.push_back(sock);}
++    uint32_t seq=0;const int phases[3]={0,0,1};
++    for(int g=-6;g<180;++g){double t=3.0+g*0.1;Simulator::Schedule(Seconds(t+.0001),&CepSend,cepSockets[0],uint8_t(0),uint8_t(255),int64_t(g),seq++);
++      for(int link=0;link<3;++link){if(activeOnly&&link==0)continue;if(((g%3)+3)%3==phases[link])Simulator::Schedule(Seconds(t+.002),&CepSend,cepSockets[link],uint8_t(1),uint8_t(link),int64_t(g),seq++);}}
++    double realAppStart=2.4;
+     // Datebase setup
+     std::string exampleName = simTag + "-" + "nr-v2x-simple-demo";
+     SQLiteOutput db(outputDir + exampleName + ".db");
+@@ -926,6 +915,7 @@
+     pscchPhyStats.EmptyCache();
+     psschPhyStats.EmptyCache();
+ 
++    cepEvents.close();
+     Simulator::Destroy();
+     return 0;
+ }

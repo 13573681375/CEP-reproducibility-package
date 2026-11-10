@@ -1,0 +1,9 @@
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
+Final Simulation duration 22.01
+Total Tx bits = 142848
+Total Tx packets = 372
+Total Rx bits = 262656
+Total Rx packets = 684
+Avrg thput = 13.394 kbps
+Average Packet Inter-Reception (PIR) -nan sec
