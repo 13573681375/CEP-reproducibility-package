@@ -1,0 +1,72 @@
+name: Publish verified CEP13 records
+on:
+  push:
+    branches: [cep13-publication]
+    paths: ['.github/workflows/cep13-publish.yml', 'publication/**']
+permissions:
+  contents: write
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.14'
+      - name: Assemble exact archive and verify locally prepared checksum
+        run: |
+          set -euo pipefail
+          mkdir -p publication/assets results/publication
+          cat publication/chunks/part_*.bin > publication/assets/CEP13_current_records.zip
+          cp publication/{install_release.py,publication_manifest.json,README_RELEASE.md,CEP13_comparison_audit.json} publication/assets/
+          python publication/assets/install_release.py --output /tmp/cep13-artifact
+          python -m pip install -r /tmp/cep13-artifact/reproducibility/requirements.txt
+          python /tmp/cep13-artifact/reproducibility/reproduce.py verify | tee results/publication/file_verification.log
+          python /tmp/cep13-artifact/reproducibility/run_minimal_review.py --output /tmp/cep13-minimal | tee results/publication/minimal_rerun.log
+          cp /tmp/cep13-minimal/C1_A_active_only/simulate.json results/publication/C1_rerun.json
+          cp /tmp/cep13-minimal/C2_first/simulate.json results/publication/C2_rerun.json
+          cp /tmp/cep13-minimal/finite/raw_results/finite_age_bound/trial_summary.csv results/publication/finite_rerun.csv
+      - name: Publish new version without replacing the existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view v1.1.0 >/dev/null 2>&1; then
+            echo 'Refusing to overwrite existing v1.1.0' >&2
+            exit 1
+          fi
+          gh release create v1.1.0 publication/assets/* --target "$GITHUB_SHA" --title 'CEP reproducibility records v1.1.0' --notes-file publication/README_RELEASE.md --latest
+          gh release view v1.1.0 --json url,tagName,isDraft,isPrerelease,assets > results/publication/release_metadata.json
+          python - <<'PY'
+          import pathlib,json,urllib.request,hashlib,time
+          root=pathlib.Path('results/publication');m=json.load(open('publication/publication_manifest.json'))
+          url='https://github.com/13573681375/CEP-reproducibility-package/releases/download/v1.1.0/CEP13_current_records.zip'
+          target=root/'public_download_check.zip'
+          for i in range(3):
+              try:
+                  urllib.request.urlretrieve(url,target);break
+              except Exception:
+                  if i==2:raise
+                  time.sleep(3)
+          actual=hashlib.file_digest(target.open('rb'),'sha256').hexdigest()
+          assert actual==m['sha256'],(actual,m['sha256'])
+          (root/'receipt.json').write_text(json.dumps(dict(status='PUBLIC_DOWNLOAD_SHA256_MATCH',release='https://github.com/13573681375/CEP-reproducibility-package/releases/tag/v1.1.0',asset_url=url,sha256=actual,bytes=target.stat().st_size,verification='Unauthenticated HTTPS download after release publication; three actual minimal reruns completed beforehand'),indent=2))
+          target.unlink()
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cep13-publication-proof
+          path: results/publication
+          retention-days: 90
+      - name: Preserve release proof
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          find results/publication -type f -print0 | xargs -0 -r git add
+          if ! git diff --cached --quiet; then
+            git commit -m "Preserve CEP13 publication verification and actual reruns"
+            git push origin HEAD:cep13-publication
+          fi

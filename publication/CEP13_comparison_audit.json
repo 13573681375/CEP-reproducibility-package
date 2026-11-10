@@ -1,0 +1,39 @@
+{
+  "status": "M2_CAPACITY_MATCH_NOT_DEMONSTRATED",
+  "frozen_M": 2,
+  "cases": [
+    {
+      "case": "Ge_A_current",
+      "path": "simulation/archive/cep_extended_validation/legacy/recorded/matched_comparison/Ge_A_current/step_records.json",
+      "sha256": "8f1a7b2421fbd06d1abcdc6c6a4777e5d89c20c3339e13018d1e1555bc977eb0",
+      "samples": 180,
+      "attempts": 537,
+      "maximum_attempts_per_sample": 3,
+      "samples_exceeding_M2": 178,
+      "tracking_RMS_m": 0.14669318462875736,
+      "counts_histogram": {
+        "1": 1,
+        "3": 178,
+        "2": 1
+      }
+    },
+    {
+      "case": "Ge_A_strict",
+      "path": "simulation/archive/cep_extended_validation/legacy/recorded/matched_comparison/Ge_A_strict/step_records.json",
+      "sha256": "5e5ba9192b7e1bbfcc2c8b701e4751374fea885994679d8fd3673ae0e97e2e10",
+      "samples": 180,
+      "attempts": 537,
+      "maximum_attempts_per_sample": 3,
+      "samples_exceeding_M2": 178,
+      "tracking_RMS_m": 0.13092110564552395,
+      "counts_histogram": {
+        "1": 1,
+        "3": 178,
+        "2": 1
+      }
+    }
+  ],
+  "interpretation": "Historical Ge adaptation allocates3 charged data attempts on178/180 samples; no M2 arbitration/queue enforcement is recorded. Keep every result but remove equal available capacity wording. A leader-side dedicated channel or a larger M would be a separately declared architecture, not a retroactive repair of this claim.",
+  "equal_tracking_matched": false,
+  "no_data_or_metric_changes": true
+}

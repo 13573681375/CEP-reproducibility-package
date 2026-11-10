@@ -1,0 +1,13 @@
+{
+  "asset": "CEP13_current_records.zip",
+  "bytes": 34628519,
+  "sha256": "e94e52898fa24550702fda84860e814e27302507e247c13b6d7b52bb19968f28",
+  "files": 1320,
+  "derived_cases": 90,
+  "derived_exports": 108,
+  "all_derived_containers_byte_identical": true,
+  "base_sha256": "d9d877fc9e219c5c0a800b3480126591839b649dd8b005cc268ca6d7a2beab39",
+  "base": "https://github.com/13573681375/CEP-reproducibility-package/releases/download/v1.0.0/cep_extended_validation.zip",
+  "base_audit_sha256": "ba2fcf274f6091355e2fa909bc328c82ed8cafe00b79ca6b28495317eaaa1d3e",
+  "base_audit": "https://github.com/13573681375/CEP-reproducibility-package/releases/download/v1.0.0/CEP3_audit_extension.zip"
+}
