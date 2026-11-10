@@ -1,0 +1,53 @@
+name: CEP13 four UE measured radio simulation
+on:
+  push:
+    branches: [cep13-validation]
+    paths: ['.github/workflows/cep13-paper-network.yml']
+permissions:
+  contents: write
+jobs:
+  radio:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pinned source and execute all predefined cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results/network
+          exec > >(tee results/network/execution.log) 2>&1
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends g++ cmake ninja-build python3-dev pkg-config libsqlite3-dev libeigen3-dev
+          git clone --depth 1 --branch ns-3-dev-v2x-v1.1 https://gitlab.com/cttc-lena/ns-3-dev.git /tmp/cep-ns3
+          git clone --depth 1 --branch v2x-1.1 https://gitlab.com/cttc-lena/nr.git /tmp/cep-ns3/contrib/nr
+          test "$(git -C /tmp/cep-ns3 rev-parse HEAD)" = c90c13b8310a813cf4eaf67a2c90df497bbd1965
+          test "$(git -C /tmp/cep-ns3/contrib/nr rev-parse HEAD)" = 72ae0c3bc894bc3416dc69832ada6fcaeebdaeaa
+          python3 validation_pending/network/patch_nr_example.py /tmp/cep-ns3/contrib/nr/examples/nr-v2x-examples/cttc-nr-v2x-demo-simple.cc
+          cd /tmp/cep-ns3
+          ./ns3 configure --enable-examples --disable-tests --enable-asserts --disable-werror --build-profile=optimized
+          ./ns3 build cttc-nr-v2x-demo-simple -j 2
+          for run in 1 2 3; do
+            for mode in 0 1; do
+              tag="run${run}_active${mode}"
+              ./ns3 run "cttc-nr-v2x-demo-simple --activeOnly=$mode --RngRun=$run --simTag=$tag --outputDir=$GITHUB_WORKSPACE/results/network/" > "$GITHUB_WORKSPACE/results/network/${tag}.log" 2>&1
+            done
+          done
+          echo PINNED_FOUR_UE_TRACE_COMPLETE > "$GITHUB_WORKSPACE/results/network/status.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cep13-four-ue-radio
+          path: results/network
+          retention-days: 30
+      - name: Preserve small actual outcome
+        if: always()
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          find results/network -type f \( -name '*.txt' -o -name '*.log' -o -name '*.patch' -o -name '*events.csv' \) -print0 | xargs -0 -r git add
+          if ! git diff --cached --quiet; then
+            git commit -m "Preserve actual four-UE NR execution and all failures"
+            git push origin HEAD:cep13-validation
+          fi
